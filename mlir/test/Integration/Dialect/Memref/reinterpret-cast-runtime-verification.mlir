@@ -3,8 +3,9 @@
 // RUN:     -finalize-memref-to-llvm \
 // RUN:     -test-cf-assert \
 // RUN:     -convert-func-to-llvm \
+// RUN:     -convert-arith-to-llvm \
 // RUN:     -reconcile-unrealized-casts | \
-// RUN: mlir-cpu-runner -e main -entry-point-result=void \
+// RUN: mlir-runner -e main -entry-point-result=void \
 // RUN:     -shared-libs=%mlir_runner_utils 2>&1 | \
 // RUN: FileCheck %s
 
@@ -34,7 +35,8 @@ func.func @main() {
   %5 = arith.constant 5 : index
 
   %alloca_1 = memref.alloca() : memref<1xf32>
-  %alloc_4 = memref.alloc(%4) : memref<?xf32>
+  %alloca_4 = memref.alloca() : memref<4xf32>
+  %alloca_4_dyn = memref.cast %alloca_4 : memref<4xf32> to memref<?xf32>
 
   // Offset is out-of-bounds
   //      CHECK: ERROR: Runtime op verification failed
@@ -55,20 +57,20 @@ func.func @main() {
   // CHECK-NEXT: "memref.reinterpret_cast"(%{{.*}})
   // CHECK-NEXT: ^ result of reinterpret_cast is out-of-bounds of the base memref
   // CHECK-NEXT: Location: loc({{.*}})
-  func.call @reinterpret_cast_fully_dynamic(%alloc_4, %0, %5, %1) : (memref<?xf32>, index, index, index) -> ()
+  func.call @reinterpret_cast_fully_dynamic(%alloca_4_dyn, %0, %5, %1) : (memref<?xf32>, index, index, index) -> ()
 
   // Stride is out-of-bounds
   //      CHECK: ERROR: Runtime op verification failed
   // CHECK-NEXT: "memref.reinterpret_cast"(%{{.*}})
   // CHECK-NEXT: ^ result of reinterpret_cast is out-of-bounds of the base memref
   // CHECK-NEXT: Location: loc({{.*}})
-  func.call @reinterpret_cast_fully_dynamic(%alloc_4, %0, %4, %4) : (memref<?xf32>, index, index, index) -> ()
+  func.call @reinterpret_cast_fully_dynamic(%alloca_4_dyn, %0, %4, %4) : (memref<?xf32>, index, index, index) -> ()
 
   //  CHECK-NOT: ERROR: Runtime op verification failed
   func.call @reinterpret_cast(%alloca_1, %0) : (memref<1xf32>, index) -> ()
 
   //  CHECK-NOT: ERROR: Runtime op verification failed
-  func.call @reinterpret_cast_fully_dynamic(%alloc_4, %0, %4, %1) : (memref<?xf32>, index, index, index) -> ()
+  func.call @reinterpret_cast_fully_dynamic(%alloca_4_dyn, %0, %4, %1) : (memref<?xf32>, index, index, index) -> ()
 
   return
 }
